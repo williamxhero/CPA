@@ -18,3 +18,4 @@ CPA 是用于统一发布和管理 SPEC 的主库。实现阶段，再将 SPEC �
 ## 当前重点大项
 
 - [SPEC：Hermes 兼容官方最新 GPT 模型与 Responses/Image 能力](https://github.com/williamxhero/CPA/issues/28)：由 CPA 内部完成 Chat Completions 到官方 Responses 的协议适配、工具超过 128 个时的延迟工具搜索、能力一致的凭证回退，以及 `gpt-image-2.6` 的图像专用路由。Hermes 无需修改；目标模型包括 `gpt-6.1-sol`、`gpt-6-astra`、`gpt-6.1-terra` 和 `gpt-image-2.6`。
+- [SPEC：CPA 错误分类、Provider 不可用与统一自动重试](https://github.com/williamxhero/CPA/issues/35)：统一管理可恢复传输错误、provider overload、429/5xx、凭证轮换、等待/backoff、重试预算和最终脱敏聚合错误；Codex TLS EOF 容错为子 SPEC [#34](https://github.com/williamxhero/CPA/issues/34)。
