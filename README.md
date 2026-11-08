@@ -14,3 +14,7 @@ CPA 是用于统一发布和管理 SPEC 的主库。实现阶段，再将 SPEC �
 | CPA-Usage-Keeper-ex | [williamxhero/CPA-Usage-Keeper-ex](https://github.com/williamxhero/CPA-Usage-Keeper-ex) | 独立的 CPA 用量追踪服务，使用 SQLite 保存历史并提供内置仪表板。 |
 
 新的 SPEC 统一提交到本库的 GitHub Issues；实现时再关联到具体子库。
+
+## 当前重点大项
+
+- [SPEC：Hermes 兼容官方最新 GPT 模型与 Responses/Image 能力](https://github.com/williamxhero/CPA/issues/28)：由 CPA 内部完成 Chat Completions 到官方 Responses 的协议适配、工具超过 128 个时的延迟工具搜索、能力一致的凭证回退，以及 `gpt-image-2.6` 的图像专用路由。Hermes 无需修改；目标模型包括 `gpt-6.1-sol`、`gpt-6-astra`、`gpt-6.1-terra` 和 `gpt-image-2.6`。
