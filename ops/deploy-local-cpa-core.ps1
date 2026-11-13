@@ -13,11 +13,14 @@ $logPath = Join-Path $opsRoot 'deploy.log'
 $resultPath = Join-Path $opsRoot 'deploy-result.json'
 $services = [ordered]@{
     LocalCPA = Join-Path $serviceRoot 'LocalCPA.exe'
+    CPAUsageKeeper = Join-Path $Root 'runtime\CPA-Usage-Keeper\CPAUsageKeeperService.exe'
     LocalCPAManagerPlus = Join-Path $serviceRoot 'LocalCPAManagerPlus.exe'
-    CPAUsageKeeper = Join-Path $Root 'runtime\\CPA-Usage-Keeper\\CPAUsageKeeperService.exe'
 }
-$startOrder = @('LocalCPA','LocalCPAManagerPlus','CPAUsageKeeper')
-$stopOrder = @('CPAUsageKeeper','LocalCPAManagerPlus','LocalCPA')
+# Usage Keeper must come up with Core before Manager: incomplete restarts that
+# leave it stopped make OpenCode/common quota refresh surface as
+# common_refresh_unavailable in the panel.
+$startOrder = @('LocalCPA','CPAUsageKeeper','LocalCPAManagerPlus')
+$stopOrder = @('LocalCPAManagerPlus','CPAUsageKeeper','LocalCPA')
 $started = $false
 $replaced = $false
 $success = $false
