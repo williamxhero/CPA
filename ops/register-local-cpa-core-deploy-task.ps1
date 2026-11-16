@@ -21,7 +21,7 @@ if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) {
 $action = New-ScheduledTaskAction -Execute $powerShell -Argument (
     '-NoProfile -ExecutionPolicy Bypass -File "' + $runner + '" -Root "' + $rootPath + '"'
 )
-$taskPrincipal = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType InteractiveToken -RunLevel Highest
+$taskPrincipal = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType Interactive -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 20)
 $definition = New-ScheduledTask -Action $action -Principal $taskPrincipal -Settings $settings -Description 'Deploy the local CPA-Core build with automatic rollback and health verification.'
 Register-ScheduledTask -TaskName $TaskName -InputObject $definition -Force | Out-Null
