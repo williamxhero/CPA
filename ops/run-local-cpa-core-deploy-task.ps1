@@ -7,7 +7,12 @@ $ErrorActionPreference = 'Stop'
 $rootPath = [IO.Path]::GetFullPath($Root)
 $taskResultPath = Join-Path $rootPath 'ops\local-cpa-core-deploy-task-result.json'
 $deployScript = Join-Path $rootPath 'ops\deploy-local-cpa-core.ps1'
+$stackDeployScript = Join-Path $rootPath 'ops\deploy-local-cpa-stack.ps1'
 $sourceRoot = Join-Path $rootPath 'CPA-Core-ex'
+$managerSource = Join-Path $rootPath 'local-deploy-artifacts\manager\cpa-manager-plus.exe'
+$panelSource = Join-Path $rootPath 'local-deploy-artifacts\manager\management.html'
+$liveManager = Join-Path $rootPath 'runtime\CPA-Manager-Plus\app\cpa-manager-plus.exe'
+$livePanel = Join-Path $rootPath 'runtime\CPA-Manager-Plus\panel\management.html'
 $startedAt = [DateTime]::UtcNow
 
 function Write-TaskResult($Value) {
@@ -47,6 +52,39 @@ try {
         throw 'core_source_outside_repository'
     }
 
+    # When a Manager build is staged next to the workspace, deploy both binaries in
+    # one stack restart so Core and the embedded panel cannot drift apart.
+    $managerStaged = ((Test-Path -LiteralPath $managerSource -PathType Leaf) -and
+        (Test-Path -LiteralPath $liveManager -PathType Leaf) -and
+        ((Get-FileHash -LiteralPath $managerSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $liveManager -Algorithm SHA256).Hash)) -or
+        ((Test-Path -LiteralPath $panelSource -PathType Leaf) -and
+            (Test-Path -LiteralPath $livePanel -PathType Leaf) -and
+            ((Get-FileHash -LiteralPath $panelSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $livePanel -Algorithm SHA256).Hash))
+    if ($managerStaged) {
+        if (-not (Test-Path -LiteralPath $stackDeployScript -PathType Leaf)) { throw 'stack_deploy_script_missing' }
+        $managerFull = [IO.Path]::GetFullPath($managerSource)
+        $panelArgument = @{}
+        if ((Test-Path -LiteralPath $panelSource -PathType Leaf) -and (Test-Path -LiteralPath $livePanel -PathType Leaf) -and
+            ((Get-FileHash -LiteralPath $panelSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $livePanel -Algorithm SHA256).Hash)) {
+            $panelArgument = @{ PanelSource = [IO.Path]::GetFullPath($panelSource) }
+        }
+        & $stackDeployScript -CoreBinary $sourceFull -ManagerBinary $managerFull -Root $rootPath @panelArgument
+        $stackExit = $LASTEXITCODE
+        if ($stackExit -and $stackExit -ne 0) {
+            throw "stack_deploy_exit_$stackExit"
+        }
+        Write-TaskResult ([ordered]@{
+                success = $true
+                mode = 'core-and-manager'
+                source = $sourceFull
+                managerSource = $managerFull
+                startedAt = $startedAt.ToString('o')
+                finishedAt = [DateTime]::UtcNow.ToString('o')
+                deployResult = (Join-Path $rootPath 'ops\local-stack-redeploy\deploy-result.json')
+            })
+        exit 0
+    }
+
     & $deployScript -SourceBinary $sourceFull -Root $rootPath
     $deployExit = $LASTEXITCODE
     if ($deployExit -and $deployExit -ne 0) {
@@ -55,6 +93,7 @@ try {
 
     Write-TaskResult ([ordered]@{
             success = $true
+            mode = 'core-only'
             source = $sourceFull
             startedAt = $startedAt.ToString('o')
             finishedAt = [DateTime]::UtcNow.ToString('o')
