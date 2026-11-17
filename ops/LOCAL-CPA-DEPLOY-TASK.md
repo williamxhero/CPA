@@ -42,8 +42,12 @@ Rebuild steps for a Usage Keeper change:
 cd D:\WILL\AGENT\CPA\CPA-Usage-Keeper-ex
 npm --prefix web run build
 $env:CGO_ENABLED = '1'
-go build -trimpath -ldflags '-s -w -X cpa-usage-keeper/internal/version.Version=local-ex-<stamp>' -o D:\WILL\AGENT\CPA\local-deploy-artifacts\keeper\cpa-usage-keeper.exe ./cmd/server/main.go
+go build -trimpath -ldflags '-s -w' -o D:\WILL\AGENT\CPA\local-deploy-artifacts\keeper\cpa-usage-keeper.exe ./cmd/server/main.go
 & D:\WILL\AGENT\CPA\ops\invoke-local-cpa-core-deploy-task.ps1
 ```
 
 The live Keeper binary is `runtime\CPA-Usage-Keeper\cpa-usage-keeper.exe`; `CPAUsageKeeperService.exe` is only the service wrapper and must not be replaced. Vite clears `web\dist`, so restore the tracked `web\dist\.gitkeep` after a build.
+
+## Versions
+
+Every EX repository derives its version from `{source}+{ex}` in its `VERSION` file; the generated Go constant is compiled into ordinary builds, so no `-X ...Version` flag belongs in local build commands. After merging a source repository run `ops\update-ex-versions.ps1` (add `-BumpEx patch` when the fork ships its own change) and rebuild before deploying. Current identities: Core `8.0.76+1.0.0`, Manager `1.14.10+1.0.0`, OpenCode plugin `0.2.2+1.0.0`, Usage Keeper `2.1.1+1.0.0`.
