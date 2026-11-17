@@ -20,7 +20,7 @@ The wrapper result is written to `ops\local-cpa-core-deploy-task-result.json`; t
 
 ## Full-stack mode
 
-When `local-deploy-artifacts\manager\` holds a freshly built `cpa-manager-plus.exe` or `management.html`, the runner switches to full-stack mode and calls `deploy-local-cpa-stack.ps1` instead. That script stops Manager → Usage Keeper → Core, replaces only the artifacts whose hash differs, then starts them in the reverse order and health-checks 8317 / 8318 / 18317.
+When `local-deploy-artifacts\manager\` holds a freshly built `cpa-manager-plus.exe` or `management.html`, or `local-deploy-artifacts\keeper\` holds a newer `cpa-usage-keeper.exe`, the runner switches to full-stack mode and calls `deploy-local-cpa-stack.ps1` instead. That script stops Manager → Usage Keeper → Core, replaces only the artifacts whose hash differs (Core, Manager, live panel, Usage Keeper), then starts them in the reverse order and health-checks 8317 / 8318 / 18317. A failed health check restores every replaced binary from the backup.
 
 The panel file matters: `runtime\CPA-Manager-Plus\config.json` sets `panelPath` to `panel\management.html`, so the panel served by the live service comes from that file and not from the copy embedded in the binary. Deploy both or the UI silently keeps the old bundle. Receipts land in `ops\local-stack-redeploy\deploy-result.json` with backups under `ops\local-stack-redeploy\backup-<timestamp>\`.
 
@@ -35,3 +35,15 @@ Copy-Item apps\web\dist\index.html D:\WILL\AGENT\CPA\local-deploy-artifacts\mana
 # rebuild cpa-manager-plus.exe into local-deploy-artifacts\manager\ too
 & D:\WILL\AGENT\CPA\ops\invoke-local-cpa-core-deploy-task.ps1
 ```
+
+Rebuild steps for a Usage Keeper change:
+
+```powershell
+cd D:\WILL\AGENT\CPA\CPA-Usage-Keeper-ex
+npm --prefix web run build
+$env:CGO_ENABLED = '1'
+go build -trimpath -ldflags '-s -w -X cpa-usage-keeper/internal/version.Version=local-ex-<stamp>' -o D:\WILL\AGENT\CPA\local-deploy-artifacts\keeper\cpa-usage-keeper.exe ./cmd/server/main.go
+& D:\WILL\AGENT\CPA\ops\invoke-local-cpa-core-deploy-task.ps1
+```
+
+The live Keeper binary is `runtime\CPA-Usage-Keeper\cpa-usage-keeper.exe`; `CPAUsageKeeperService.exe` is only the service wrapper and must not be replaced. Vite clears `web\dist`, so restore the tracked `web\dist\.gitkeep` after a build.

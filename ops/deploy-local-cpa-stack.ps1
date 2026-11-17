@@ -2,6 +2,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$CoreBinary,
     [Parameter(Mandatory=$true)][string]$ManagerBinary,
+    [string]$KeeperBinary = '',
     [string]$PanelSource = '',
     [string]$Root = 'D:\WILL\AGENT\CPA'
 )
@@ -14,6 +15,7 @@ $liveManager = Join-Path $managerRoot 'app\cpa-manager-plus.exe'
 # CPAMP serves the panel from this file when config.json sets panelPath; the
 # embedded copy inside the Manager binary is then ignored.
 $livePanel = Join-Path $managerRoot 'panel\management.html'
+$liveKeeper = Join-Path $Root 'runtime\CPA-Usage-Keeper\cpa-usage-keeper.exe'
 $serviceRoot = Join-Path $Root 'ops\cpa-windows-services\runtime'
 $backupRoot = Join-Path $opsRoot ('backup-' + (Get-Date -Format 'yyyyMMddTHHmmss'))
 $logPath = Join-Path $opsRoot 'deploy.log'
@@ -82,7 +84,8 @@ function Restore-Binaries {
     foreach ($item in @(
             @{ Live = $liveCore; Backup = (Join-Path $backupRoot 'cli-proxy-api.exe') },
             @{ Live = $liveManager; Backup = (Join-Path $backupRoot 'cpa-manager-plus.exe') },
-            @{ Live = $livePanel; Backup = (Join-Path $backupRoot 'management.html') }
+            @{ Live = $livePanel; Backup = (Join-Path $backupRoot 'management.html') },
+            @{ Live = $liveKeeper; Backup = (Join-Path $backupRoot 'cpa-usage-keeper.exe') }
         )) {
         if (Test-Path -LiteralPath $item.Backup) {
             Copy-Item -LiteralPath $item.Backup -Destination $item.Live -Force
@@ -94,6 +97,9 @@ try {
     $sources = [ordered]@{
         $liveCore = [IO.Path]::GetFullPath($CoreBinary)
         $liveManager = [IO.Path]::GetFullPath($ManagerBinary)
+    }
+    if ($KeeperBinary) {
+        $sources[$liveKeeper] = [IO.Path]::GetFullPath($KeeperBinary)
     }
     $hashes = @{}
     foreach ($pair in $sources.GetEnumerator()) {
@@ -116,6 +122,9 @@ try {
     }
     Copy-Item -LiteralPath $liveCore -Destination (Join-Path $backupRoot 'cli-proxy-api.exe') -Force
     Copy-Item -LiteralPath $liveManager -Destination (Join-Path $backupRoot 'cpa-manager-plus.exe') -Force
+    if (Test-Path -LiteralPath $liveKeeper) {
+        Copy-Item -LiteralPath $liveKeeper -Destination (Join-Path $backupRoot 'cpa-usage-keeper.exe') -Force
+    }
     Write-Log "Backup created: $backupRoot"
     Stop-CPAStack
     if ($PanelSource) {
@@ -152,6 +161,7 @@ try {
         Success = $true
         Core = [pscustomobject]@{ Source = $sources[$liveCore]; Live = $liveCore; Hash = $hashes[$liveCore] }
         Manager = [pscustomobject]@{ Source = $sources[$liveManager]; Live = $liveManager; Hash = $hashes[$liveManager] }
+        Keeper = if ($KeeperBinary) { [pscustomobject]@{ Source = $sources[$liveKeeper]; Live = $liveKeeper; Hash = $hashes[$liveKeeper] } } else { $null }
         Panel = if ($PanelSource) { [pscustomobject]@{ Source = [IO.Path]::GetFullPath($PanelSource); Live = $livePanel } } else { $null }
         Backup = $backupRoot
         Services = $startOrder

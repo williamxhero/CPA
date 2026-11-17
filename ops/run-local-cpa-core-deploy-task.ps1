@@ -13,6 +13,8 @@ $managerSource = Join-Path $rootPath 'local-deploy-artifacts\manager\cpa-manager
 $panelSource = Join-Path $rootPath 'local-deploy-artifacts\manager\management.html'
 $liveManager = Join-Path $rootPath 'runtime\CPA-Manager-Plus\app\cpa-manager-plus.exe'
 $livePanel = Join-Path $rootPath 'runtime\CPA-Manager-Plus\panel\management.html'
+$keeperSource = Join-Path $rootPath 'local-deploy-artifacts\keeper\cpa-usage-keeper.exe'
+$liveKeeper = Join-Path $rootPath 'runtime\CPA-Usage-Keeper\cpa-usage-keeper.exe'
 $startedAt = [DateTime]::UtcNow
 
 function Write-TaskResult($Value) {
@@ -60,7 +62,10 @@ try {
         ((Test-Path -LiteralPath $panelSource -PathType Leaf) -and
             (Test-Path -LiteralPath $livePanel -PathType Leaf) -and
             ((Get-FileHash -LiteralPath $panelSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $livePanel -Algorithm SHA256).Hash))
-    if ($managerStaged) {
+    $keeperStaged = (Test-Path -LiteralPath $keeperSource -PathType Leaf) -and
+        (Test-Path -LiteralPath $liveKeeper -PathType Leaf) -and
+        ((Get-FileHash -LiteralPath $keeperSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $liveKeeper -Algorithm SHA256).Hash)
+    if ($managerStaged -or $keeperStaged) {
         if (-not (Test-Path -LiteralPath $stackDeployScript -PathType Leaf)) { throw 'stack_deploy_script_missing' }
         $managerFull = [IO.Path]::GetFullPath($managerSource)
         $panelArgument = @{}
@@ -68,7 +73,11 @@ try {
             ((Get-FileHash -LiteralPath $panelSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $livePanel -Algorithm SHA256).Hash)) {
             $panelArgument = @{ PanelSource = [IO.Path]::GetFullPath($panelSource) }
         }
-        & $stackDeployScript -CoreBinary $sourceFull -ManagerBinary $managerFull -Root $rootPath @panelArgument
+        $keeperArgument = @{}
+        if ($keeperStaged) {
+            $keeperArgument = @{ KeeperBinary = [IO.Path]::GetFullPath($keeperSource) }
+        }
+        & $stackDeployScript -CoreBinary $sourceFull -ManagerBinary $managerFull -Root $rootPath @panelArgument @keeperArgument
         $stackExit = $LASTEXITCODE
         if ($stackExit -and $stackExit -ne 0) {
             throw "stack_deploy_exit_$stackExit"
@@ -78,6 +87,7 @@ try {
                 mode = 'core-and-manager'
                 source = $sourceFull
                 managerSource = $managerFull
+                keeperSource = if ($keeperStaged) { [IO.Path]::GetFullPath($keeperSource) } else { $null }
                 startedAt = $startedAt.ToString('o')
                 finishedAt = [DateTime]::UtcNow.ToString('o')
                 deployResult = (Join-Path $rootPath 'ops\local-stack-redeploy\deploy-result.json')
