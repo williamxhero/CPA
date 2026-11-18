@@ -44,13 +44,38 @@ function Invoke-Service([string]$Name, [ValidateSet('start','stop')][string]$Act
         throw "Service wrapper failed: $Name $Action (exit $LASTEXITCODE)"
     }
 }
+function Get-CPAListenerPorts {
+    # SCM reports a service stopped before its process has released the socket,
+    # and the TCP CIM provider can hand back rows whose State has no name. Read
+    # netstat's LISTENING rows instead: only a bound loopback socket counts.
+    $monitored = @(8317, 8318, 18317)
+    $found = @()
+    foreach ($line in @(netstat.exe -ano -p tcp)) {
+        if ($line -notmatch 'LISTENING') { continue }
+        $fields = $line.Trim() -split '\s+'
+        if ($fields.Length -lt 4) { continue }
+        $local = $fields[1]
+        $separator = $local.LastIndexOf(':')
+        if ($separator -lt 0) { continue }
+        $port = 0
+        if (-not [int]::TryParse($local.Substring($separator + 1), [ref]$port)) { continue }
+        if ($monitored -contains $port) { $found += $port }
+    }
+    return @($found | Sort-Object -Unique)
+}
 function Stop-CPAStack {
     foreach ($name in $stopOrder) {
         Invoke-Service $name stop
     }
-    Start-Sleep -Seconds 2
-    $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 8317,8318,18317 })
-    if ($listeners.Count -gt 0) { throw 'CPA listeners remained after stop' }
+    # SCM can report a service stopped before its process releases the socket,
+    # so re-read the real LISTENING rows and let teardown drain.
+    $deadline = (Get-Date).AddSeconds(30)
+    do {
+        $listening = @(Get-CPAListenerPorts)
+        if ($listening.Count -eq 0) { return }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    throw ('CPA listeners remained after stop: ' + ($listening -join ', '))
 }
 function Start-CPAStack {
     foreach ($name in $startOrder) {

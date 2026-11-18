@@ -15,6 +15,8 @@ $liveManager = Join-Path $rootPath 'runtime\CPA-Manager-Plus\app\cpa-manager-plu
 $livePanel = Join-Path $rootPath 'runtime\CPA-Manager-Plus\panel\management.html'
 $keeperSource = Join-Path $rootPath 'local-deploy-artifacts\keeper\cpa-usage-keeper.exe'
 $liveKeeper = Join-Path $rootPath 'runtime\CPA-Usage-Keeper\cpa-usage-keeper.exe'
+$openCodeSource = Join-Path $rootPath 'local-deploy-artifacts\opencode\cpa-credential-opencode.dll'
+$liveOpenCode = Join-Path $rootPath 'runtime\CPA-Core\plugins\windows\amd64\cpa-credential-opencode.dll'
 $startedAt = [DateTime]::UtcNow
 
 function Write-TaskResult($Value) {
@@ -65,7 +67,10 @@ try {
     $keeperStaged = (Test-Path -LiteralPath $keeperSource -PathType Leaf) -and
         (Test-Path -LiteralPath $liveKeeper -PathType Leaf) -and
         ((Get-FileHash -LiteralPath $keeperSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $liveKeeper -Algorithm SHA256).Hash)
-    if ($managerStaged -or $keeperStaged) {
+    $openCodeStaged = (Test-Path -LiteralPath $openCodeSource -PathType Leaf) -and
+        (Test-Path -LiteralPath $liveOpenCode -PathType Leaf) -and
+        ((Get-FileHash -LiteralPath $openCodeSource -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $liveOpenCode -Algorithm SHA256).Hash)
+    if ($managerStaged -or $keeperStaged -or $openCodeStaged) {
         if (-not (Test-Path -LiteralPath $stackDeployScript -PathType Leaf)) { throw 'stack_deploy_script_missing' }
         $managerFull = [IO.Path]::GetFullPath($managerSource)
         $panelArgument = @{}
@@ -77,7 +82,9 @@ try {
         if ($keeperStaged) {
             $keeperArgument = @{ KeeperBinary = [IO.Path]::GetFullPath($keeperSource) }
         }
-        & $stackDeployScript -CoreBinary $sourceFull -ManagerBinary $managerFull -Root $rootPath @panelArgument @keeperArgument
+        $pluginArgument = @{}
+        if ($openCodeStaged) { $pluginArgument = @{ OpenCodePlugin = [IO.Path]::GetFullPath($openCodeSource) } }
+        & $stackDeployScript -CoreBinary $sourceFull -ManagerBinary $managerFull -Root $rootPath @panelArgument @keeperArgument @pluginArgument
         $stackExit = $LASTEXITCODE
         if ($stackExit -and $stackExit -ne 0) {
             throw "stack_deploy_exit_$stackExit"
@@ -87,6 +94,7 @@ try {
                 mode = 'core-and-manager'
                 source = $sourceFull
                 managerSource = $managerFull
+                openCodeSource = if ($openCodeStaged) { [IO.Path]::GetFullPath($openCodeSource) } else { $null }
                 keeperSource = if ($keeperStaged) { [IO.Path]::GetFullPath($keeperSource) } else { $null }
                 startedAt = $startedAt.ToString('o')
                 finishedAt = [DateTime]::UtcNow.ToString('o')

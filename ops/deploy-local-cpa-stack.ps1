@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory=$true)][string]$ManagerBinary,
     [string]$KeeperBinary = '',
     [string]$PanelSource = '',
+    [string]$OpenCodePlugin = '',
     [string]$Root = 'D:\WILL\AGENT\CPA'
 )
 $ErrorActionPreference = 'Stop'
@@ -16,6 +17,7 @@ $liveManager = Join-Path $managerRoot 'app\cpa-manager-plus.exe'
 # embedded copy inside the Manager binary is then ignored.
 $livePanel = Join-Path $managerRoot 'panel\management.html'
 $liveKeeper = Join-Path $Root 'runtime\CPA-Usage-Keeper\cpa-usage-keeper.exe'
+$liveOpenCode = Join-Path $coreRoot 'plugins\windows\amd64\cpa-credential-opencode.dll'
 $serviceRoot = Join-Path $Root 'ops\cpa-windows-services\runtime'
 $backupRoot = Join-Path $opsRoot ('backup-' + (Get-Date -Format 'yyyyMMddTHHmmss'))
 $logPath = Join-Path $opsRoot 'deploy.log'
@@ -53,11 +55,36 @@ function Invoke-Service([string]$Name, [ValidateSet('start','stop')][string]$Act
         throw "Service wrapper failed: $Name $Action (exit $LASTEXITCODE)"
     }
 }
+function Get-CPAListenerPorts {
+    # SCM reports a service stopped before its process has released the socket,
+    # and the TCP CIM provider can hand back rows whose State has no name. Read
+    # netstat's LISTENING rows instead: only a bound loopback socket counts.
+    $monitored = @(8317, 8318, 18317)
+    $found = @()
+    foreach ($line in @(netstat.exe -ano -p tcp)) {
+        if ($line -notmatch 'LISTENING') { continue }
+        $fields = $line.Trim() -split '\s+'
+        if ($fields.Length -lt 4) { continue }
+        $local = $fields[1]
+        $separator = $local.LastIndexOf(':')
+        if ($separator -lt 0) { continue }
+        $port = 0
+        if (-not [int]::TryParse($local.Substring($separator + 1), [ref]$port)) { continue }
+        if ($monitored -contains $port) { $found += $port }
+    }
+    return @($found | Sort-Object -Unique)
+}
 function Stop-CPAStack {
     foreach ($name in $stopOrder) { Invoke-Service $name stop }
-    Start-Sleep -Seconds 2
-    $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 8317,8318,18317 })
-    if ($listeners.Count -gt 0) { throw 'CPA listeners remained after stop' }
+    # SCM can report a service stopped before its process releases the socket,
+    # so re-read the real LISTENING rows and let teardown drain.
+    $deadline = (Get-Date).AddSeconds(30)
+    do {
+        $listening = @(Get-CPAListenerPorts)
+        if ($listening.Count -eq 0) { return }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    throw ('CPA listeners remained after stop: ' + ($listening -join ', '))
 }
 function Start-CPAStack {
     foreach ($name in $startOrder) { Invoke-Service $name start }
@@ -85,7 +112,8 @@ function Restore-Binaries {
             @{ Live = $liveCore; Backup = (Join-Path $backupRoot 'cli-proxy-api.exe') },
             @{ Live = $liveManager; Backup = (Join-Path $backupRoot 'cpa-manager-plus.exe') },
             @{ Live = $livePanel; Backup = (Join-Path $backupRoot 'management.html') },
-            @{ Live = $liveKeeper; Backup = (Join-Path $backupRoot 'cpa-usage-keeper.exe') }
+            @{ Live = $liveKeeper; Backup = (Join-Path $backupRoot 'cpa-usage-keeper.exe') },
+            @{ Live = $liveOpenCode; Backup = (Join-Path $backupRoot 'cpa-credential-opencode.dll') }
         )) {
         if (Test-Path -LiteralPath $item.Backup) {
             Copy-Item -LiteralPath $item.Backup -Destination $item.Live -Force
@@ -100,6 +128,9 @@ try {
     }
     if ($KeeperBinary) {
         $sources[$liveKeeper] = [IO.Path]::GetFullPath($KeeperBinary)
+    }
+    if ($OpenCodePlugin) {
+        $sources[$liveOpenCode] = [IO.Path]::GetFullPath($OpenCodePlugin)
     }
     $hashes = @{}
     foreach ($pair in $sources.GetEnumerator()) {
@@ -124,6 +155,11 @@ try {
     Copy-Item -LiteralPath $liveManager -Destination (Join-Path $backupRoot 'cpa-manager-plus.exe') -Force
     if (Test-Path -LiteralPath $liveKeeper) {
         Copy-Item -LiteralPath $liveKeeper -Destination (Join-Path $backupRoot 'cpa-usage-keeper.exe') -Force
+    }
+    if ($OpenCodePlugin) {
+        $pluginBackup = Join-Path $backupRoot 'cpa-credential-opencode.dll'
+        Copy-Item -LiteralPath $liveOpenCode -Destination $pluginBackup -Force
+        if ((Get-FileHash -LiteralPath $pluginBackup -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $liveOpenCode -Algorithm SHA256).Hash) { throw 'OpenCode backup hash mismatch' }
     }
     Write-Log "Backup created: $backupRoot"
     Stop-CPAStack
@@ -162,6 +198,7 @@ try {
         Core = [pscustomobject]@{ Source = $sources[$liveCore]; Live = $liveCore; Hash = $hashes[$liveCore] }
         Manager = [pscustomobject]@{ Source = $sources[$liveManager]; Live = $liveManager; Hash = $hashes[$liveManager] }
         Keeper = if ($KeeperBinary) { [pscustomobject]@{ Source = $sources[$liveKeeper]; Live = $liveKeeper; Hash = $hashes[$liveKeeper] } } else { $null }
+        OpenCode = if ($OpenCodePlugin) { [pscustomobject]@{ Source = $sources[$liveOpenCode]; Live = $liveOpenCode; Hash = $hashes[$liveOpenCode] } } else { $null }
         Panel = if ($PanelSource) { [pscustomobject]@{ Source = [IO.Path]::GetFullPath($PanelSource); Live = $livePanel } } else { $null }
         Backup = $backupRoot
         Services = $startOrder
