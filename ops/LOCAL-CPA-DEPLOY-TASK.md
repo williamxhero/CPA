@@ -50,4 +50,6 @@ The live Keeper binary is `runtime\CPA-Usage-Keeper\cpa-usage-keeper.exe`; `CPAU
 
 ## Versions
 
-Every EX repository derives its version from `{source}+{ex}` in its `VERSION` file; the generated Go constant is compiled into ordinary builds, so no `-X ...Version` flag belongs in local build commands. After merging a source repository run `ops\update-ex-versions.ps1` (add `-BumpEx patch` when the fork ships its own change) and rebuild before deploying. Current identities: Core `8.0.76+1.0.0`, Manager `1.14.10+1.0.0`, OpenCode plugin `0.2.2+1.0.0`, Usage Keeper `2.1.1+1.0.0`.
+Every child repository derives its version from `VERSION` at its root: forks of a source project use `{source}+{own}` (Core `8.0.76+1.0.0`, Manager `1.14.10+1.0.0`, OpenCode plugin `0.2.2+1.0.0`, Usage Keeper `2.1.1+1.0.0`), while self-owned repositories use the plain own version (Aliyun Quota `0.1.1`, Qwen `0.1.1`). The generated Go constant is compiled into ordinary builds, so no `-X ...Version` flag belongs in local build commands.
+
+Run `ops\update-versions.ps1 -BumpChanged` before committing a change and `ops\update-versions.ps1 -Check` before reporting completion; after merging a source repository a plain `ops\update-versions.ps1` refreshes the source part. Rebuild and deploy only when a shipped artifact changed, so the running services report the version that was actually delivered.
