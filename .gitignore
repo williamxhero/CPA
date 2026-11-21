@@ -1,3 +1,12 @@
 *
 !.gitignore
 !README.md
+
+# Project glossary and Provider scheduling design
+!/GLOSSARY.md
+!/UBIQUITOUS_LANGUAGE.md
+!/docs/
+/docs/*
+!/docs/architecture/
+/docs/architecture/*
+!/docs/architecture/provider-scheduling.md

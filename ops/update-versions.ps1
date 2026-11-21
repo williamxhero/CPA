@@ -76,7 +76,6 @@ $definitions = @(
     [ordered]@{ Name = 'CPA-Manager-Plus-ex'; Kind = 'composed'; Source = 'origin/main'; Generated = 'apps\manager-server\internal\buildinfo\version_generated.go'; Package = 'buildinfo' }
     [ordered]@{ Name = 'CPA-OpenCode-ex'; Kind = 'composed'; Source = 'origin/main'; Generated = 'internal\plugin\version_generated.go'; Package = 'plugin' }
     [ordered]@{ Name = 'CPA-Usage-Keeper-ex'; Kind = 'composed'; Source = 'upstream/main'; Generated = 'internal\version\version_generated.go'; Package = 'version' }
-    [ordered]@{ Name = 'CPA-Aliyun-Quota'; Kind = 'standalone'; Source = ''; Generated = 'internal\plugin\version_generated.go'; Package = 'plugin' }
     [ordered]@{ Name = 'CPA-Qwen'; Kind = 'standalone'; Source = ''; Generated = 'internal\plugin\version_generated.go'; Package = 'plugin' }
 )
 

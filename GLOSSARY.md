@@ -1,0 +1,3 @@
+# CPA 领域词汇
+
+CPA 的调度术语统一维护在 [UBIQUITOUS_LANGUAGE.md](UBIQUITOUS_LANGUAGE.md)。
